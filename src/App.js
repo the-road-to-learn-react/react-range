@@ -3,14 +3,22 @@ import styled from 'styled-components';
 
 const RangeHeader = styled.div`
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
 `;
 
 const StyledRange = styled.div`
+  position: relative;
   border-radius: 3px;
   background: #dddddd;
-  margin: 5px;
   height: 15px;
+`;
+
+const StyledRangeProgress = styled.div`
+  border-radius: 3px;
+  position: absolute;
+  height: 100%;
+  opacity: 0.5;
+  background: #823eb7;
 `;
 
 const StyledThumb = styled.div`
@@ -24,25 +32,40 @@ const StyledThumb = styled.div`
   cursor: pointer;
 `;
 
-const getPercentage = (current, max) => (100 * current) / max;
+const getPercentage = (current, min, max) =>
+  ((current - min) / (max - min)) * 100;
 
-const getValue = (percentage, max) => (max / 100) * percentage;
+const getValue = (percentage, min, max) =>
+  ((max - min) / 100) * percentage + min;
 
 const getLeft = percentage => `calc(${percentage}% - 5px)`;
 
+const getWidth = percentage => `${percentage}%`;
+
 const Range = ({
   initial,
+  min = 0,
   max,
   formatFn = number => number.toFixed(0),
   onChange,
 }) => {
-  const initialPercentage = getPercentage(initial, max);
+  const initialPercentage = getPercentage(initial, min, max);
 
   const rangeRef = React.useRef();
+  const rangeProgressRef = React.useRef();
   const thumbRef = React.useRef();
   const currentRef = React.useRef();
 
   const diff = React.useRef();
+
+  const handleUpdate = React.useCallback(
+    (value, percentage) => {
+      thumbRef.current.style.left = getLeft(percentage);
+      rangeProgressRef.current.style.width = getWidth(percentage);
+      currentRef.current.textContent = formatFn(value);
+    },
+    [formatFn]
+  );
 
   const handleMouseMove = event => {
     let newX =
@@ -63,11 +86,10 @@ const Range = ({
       newX = end;
     }
 
-    const newPercentage = getPercentage(newX, end);
-    const newValue = getValue(newPercentage, max);
+    const newPercentage = getPercentage(newX, start, end);
+    const newValue = getValue(newPercentage, min, max);
 
-    thumbRef.current.style.left = getLeft(newPercentage);
-    currentRef.current.textContent = formatFn(newValue);
+    handleUpdate(newValue, newPercentage);
 
     onChange(newValue);
   };
@@ -85,19 +107,23 @@ const Range = ({
     document.addEventListener('mouseup', handleMouseUp);
   };
 
+  React.useLayoutEffect(() => {
+    handleUpdate(initial, initialPercentage);
+  }, [initial, initialPercentage, handleUpdate]);
+
   return (
     <>
       <RangeHeader>
-        <strong ref={currentRef}>{formatFn(initial)}</strong>
-        &nbsp;/&nbsp;
-        {max}
+        <div>{formatFn(min)}</div>
+        <div>
+          <strong ref={currentRef} />
+          &nbsp;/&nbsp;
+          {formatFn(max)}
+        </div>
       </RangeHeader>
       <StyledRange ref={rangeRef}>
-        <StyledThumb
-          style={{ left: getLeft(initialPercentage) }}
-          ref={thumbRef}
-          onMouseDown={handleMouseDown}
-        />
+        <StyledRangeProgress ref={rangeProgressRef} />
+        <StyledThumb ref={thumbRef} onMouseDown={handleMouseDown} />
       </StyledRange>
     </>
   );
@@ -107,6 +133,7 @@ const App = () => (
   <div>
     <Range
       initial={10}
+      min={5}
       max={25}
       formatFn={number => number.toFixed(2)}
       onChange={value => console.log(value)}
